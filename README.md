@@ -20,7 +20,9 @@ The original library has critical bugs that cause localization to fail:
 
 2. **Culture resolution priority** - Used `DefaultThreadCurrentUICulture ?? CurrentUICulture`, causing the process-wide default to override per-request culture set by `RequestLocalizationMiddleware`.
 
-Both issues are now fixed.
+3. **Culture state corruption on cache hit** - When switching to a previously-cached culture, `_currentCulture` was not updated, causing subsequent lookups to return wrong translations.
+
+All issues are now fixed.
 
 # IMPORTANT
 
