@@ -26,10 +26,10 @@ jobs:
             10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore AspNetCore.Localizer.Json.sln
+        run: dotnet restore test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj
 
       - name: Build
-        run: dotnet build AspNetCore.Localizer.Json.sln --no-restore -c Release
+        run: dotnet build test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --no-restore -c Release
 
       - name: Test
-        run: dotnet test test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --no-restore --verbosity normal -c Release
+        run: dotnet test test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --no-build --verbosity normal -c Release

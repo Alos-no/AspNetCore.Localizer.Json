@@ -78,17 +78,17 @@ jobs:
             10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore AspNetCore.Localizer.Json.sln
+        run: dotnet restore test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj
 
-      - name: Build solution
-        run: dotnet build AspNetCore.Localizer.Json.sln --configuration Release --no-restore
+      - name: Build
+        run: dotnet build test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --configuration Release --no-restore
 
       - name: Run tests
         run: dotnet test test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --configuration Release --no-build --verbosity normal
 
       - name: Create NuGet packages
         # Pack the main library project
-        # The version is determined by the <Version> property in the .csproj file
+        # The version is determined by the <Version> property in Directory.Build.props
         run: dotnet pack AspNetCore.Localizer.Json/AspNetCore.Localizer.Json.csproj --configuration Release --no-build --output ./artifacts
 
       - name: List generated packages
