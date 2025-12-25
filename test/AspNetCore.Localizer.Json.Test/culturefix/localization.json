@@ -22,5 +22,18 @@
       "fr-FR": "Bienvenue dans notre application",
       "de-DE": "Willkommen in unserer Anwendung"
     }
+  },
+  "Error.Title.Validation": {
+    "Values": {
+      "en-US": "Validation Error",
+      "nb-NO": "Valideringsfeil",
+      "fr-FR": "Erreur de validation",
+      "de-DE": "Validierungsfehler"
+    }
+  },
+  "Error.EnglishOnly": {
+    "Values": {
+      "en-US": "This message only exists in English"
+    }
   }
 }

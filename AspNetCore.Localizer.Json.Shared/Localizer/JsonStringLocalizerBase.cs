@@ -108,6 +108,35 @@ namespace AspNetCore.Localizer.Json.Localizer
             LocalizationOptions.Value.SupportedCultureInfos.Add(cultureInfo);
         }
 
+        /// <summary>
+        /// Initializes the localizer for the specified culture, loading translations from cache
+        /// or constructing them from JSON files.
+        /// </summary>
+        /// <param name="currentCulture">The culture to load translations for.</param>
+        /// <returns>
+        /// <c>true</c> if translations were found in memory cache; <c>false</c> if they were
+        /// constructed from JSON files (and then cached).
+        /// </returns>
+        /// <remarks>
+        /// <para>
+        /// CRITICAL BUG FIX: On cache HIT, this method must update <c>_currentCulture</c> to
+        /// maintain consistency between <c>_currentCulture</c> and <c>Localization</c>.
+        /// </para>
+        /// <para>
+        /// Without this fix, the fallback mechanism in <c>GetString</c> can leave the localizer
+        /// in an inconsistent state. When a key is not found in the requested culture (e.g., nb-NO),
+        /// <c>GetString</c> calls <c>InitJsonFromCulture(DefaultCulture)</c> to try the fallback.
+        /// If the default culture (e.g., en-US) is already cached, this method would set
+        /// <c>Localization</c> to the default culture's translations via the out parameter,
+        /// but <c>_currentCulture</c> would remain unchanged (still "nb-NO").
+        /// </para>
+        /// <para>
+        /// On the next <c>GetString</c> call, <c>IsUiCultureCurrentCulture</c> would incorrectly
+        /// return <c>true</c> (because <c>_currentCulture</c> still matches the request culture),
+        /// skipping the reload. But <c>Localization</c> is pointing to the wrong culture's
+        /// translations, causing incorrect localization.
+        /// </para>
+        /// </remarks>
         protected bool InitJsonStringLocalizer(CultureInfo currentCulture)
         {
             if (!MemCache.TryGetValue(GetCacheKey(currentCulture), out Localization))
@@ -116,7 +145,11 @@ namespace AspNetCore.Localizer.Json.Localizer
                 MemCache.Set(GetCacheKey(currentCulture), Localization, _memCacheDuration);
                 return false;
             }
-            
+
+            // BUG FIX: Update _currentCulture on cache HIT to maintain consistency
+            // between _currentCulture and Localization. See remarks for details.
+            _currentCulture = currentCulture.Name;
+
             return true;
         }
 
