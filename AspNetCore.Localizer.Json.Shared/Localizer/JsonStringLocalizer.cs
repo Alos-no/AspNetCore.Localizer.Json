@@ -115,10 +115,34 @@ namespace AspNetCore.Localizer.Json.Localizer
             return new LocalizedString(name, value, resourceNotFound);
         }
 
+        /// <summary>
+        /// Initializes the JSON localizer for the current request's culture.
+        /// </summary>
+        /// <param name="shouldTryDefaultCulture">Whether to try the default culture as a fallback.</param>
+        /// <returns>The <see cref="CultureInfo"/> being used for localization.</returns>
+        /// <remarks>
+        /// <para>
+        /// In ASP.NET Core, the <see cref="CultureInfo.CurrentUICulture"/> is set per-request by the
+        /// <c>RequestLocalizationMiddleware</c> based on the Accept-Language header or other configured
+        /// providers. This is the correct culture to use for localizing HTTP responses.
+        /// </para>
+        /// <para>
+        /// The previous implementation used <c>DefaultThreadCurrentUICulture ?? CurrentUICulture</c>,
+        /// which caused localization to fail in exception handlers, integration tests, and other
+        /// scenarios where <c>DefaultThreadCurrentUICulture</c> was set to the system default (e.g., en-US)
+        /// and overrode the per-request culture set by the middleware.
+        /// </para>
+        /// <para>
+        /// See: https://github.com/AskmethatFR/AspNetCore.Localizer.Json/issues/XXX
+        /// </para>
+        /// </remarks>
         private CultureInfo InitCorrectJsonCulture(bool shouldTryDefaultCulture = false)
         {
-            // Initialize the culture if needed
-            var culture = CultureInfo.DefaultThreadCurrentUICulture ?? CultureInfo.CurrentUICulture;
+            // IMPORTANT: Use CurrentUICulture (set per-request by ASP.NET Core's RequestLocalizationMiddleware)
+            // instead of DefaultThreadCurrentUICulture (process-wide default that incorrectly overrides
+            // the per-request culture in exception handlers, test hosts, and other edge cases).
+            var culture = CultureInfo.CurrentUICulture;
+
             if (!IsUiCultureCurrentCulture(culture))
             {
                 InitJsonFromCulture(culture);
@@ -146,7 +170,20 @@ namespace AspNetCore.Localizer.Json.Localizer
             return new JsonStringLocalizer(LocalizationOptions);
         }
 
+        /// <summary>
+        /// Per-instance cache for translated strings. The key includes culture name to ensure
+        /// culture changes return the correct translation.
+        /// Format: "{cultureName}:{resourceKey}"
+        /// </summary>
         private readonly Dictionary<string, string> _localStringCache = new();
+
+        /// <summary>
+        /// Builds a culture-aware cache key for the local string cache.
+        /// </summary>
+        /// <param name="cultureName">The culture name (e.g., "en-US", "nb-NO").</param>
+        /// <param name="name">The resource key name.</param>
+        /// <returns>A composite cache key in the format "{cultureName}:{name}".</returns>
+        private static string GetLocalCacheKey(string cultureName, string name) => $"{cultureName}:{name}";
 
         private string? GetString(string name, bool shouldTryDefaultCulture = true)
         {
@@ -157,17 +194,20 @@ namespace AspNetCore.Localizer.Json.Localizer
                 return string.Empty;
             }
 
-            // Check cache before looking up
-            if (_localStringCache.TryGetValue(name, out string? cachedValue))
+            // IMPORTANT: Determine culture FIRST, before checking cache.
+            // This ensures we use the correct culture-specific cache key.
+            var culture = InitCorrectJsonCulture(true);
+            var cacheKey = GetLocalCacheKey(culture.Name, name);
+
+            // Check cache with culture-aware key
+            if (_localStringCache.TryGetValue(cacheKey, out string? cachedValue))
             {
                 return cachedValue;
             }
 
-            var culture = InitCorrectJsonCulture(true);
-
             if (Localization != null && Localization.TryGetValue(name, out LocalizatedFormat? localizedValue))
             {
-                _localStringCache[name] = localizedValue.Value;
+                _localStringCache[cacheKey] = localizedValue.Value;
                 return localizedValue.Value;
             }
 

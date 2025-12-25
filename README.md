@@ -1,18 +1,30 @@
-# AspNetCore.Localizer.Json
+# Alos.AspNetCore.Localizer.Json
 
-Json Localizer library for .NetCore Asp.net projects
+Json Localizer library for .NET ASP.NET Core projects.
 
-#### Nuget
+> **This is a maintained fork of [AspNetCore.Localizer.Json](https://github.com/AskmethatFR/AspNetCore.Localizer.Json)** with critical bug fixes.
 
-[![NuGet](https://img.shields.io/nuget/dt/AspNetCore.Localizer.Json.svg)](https://www.nuget.org/packages/AspNetCore.Localizer.Json)
+#### NuGet
+
+[![NuGet](https://img.shields.io/nuget/dt/Alos.AspNetCore.Localizer.Json.svg)](https://www.nuget.org/packages/Alos.AspNetCore.Localizer.Json)
 
 #### Build
 
-[![.NET](https://github.com/AskmethatFR/AspNetCore.Localizer.Json/actions/workflows/dotnet.yml/badge.svg)](https://github.com/AskmethatFR/AspNetCore.Localizer.Json/actions/workflows/dotnet.yml)
+[![CI](https://github.com/Alos-no/AspNetCore.Localizer.Json/actions/workflows/CI.yml/badge.svg)](https://github.com/Alos-no/AspNetCore.Localizer.Json/actions/workflows/CI.yml)
+
+## Why This Fork?
+
+The original library has critical bugs that cause localization to fail:
+
+1. **Cache key missing culture** - Cache was keyed by resource name only. Once cached in one culture, wrong translations were returned for other cultures.
+
+2. **Culture resolution priority** - Used `DefaultThreadCurrentUICulture ?? CurrentUICulture`, causing the process-wide default to override per-request culture set by `RequestLocalizationMiddleware`.
+
+Both issues are now fixed.
 
 # IMPORTANT
 
-From version 1.0.0, the library use only EmbeddedResource to load the files.
+From version 1.0.0, the library uses only EmbeddedResource to load the files.
 
 # Project
 
@@ -284,4 +296,6 @@ System.Text.Json & making it working for blazor wasm
 
 # License
 
-[MIT Licence](https://github.com/AlexTeixeira/Askmethat-Aspnet-JsonLocalizer/blob/master/LICENSE)
+[MIT License](LICENSE)
+
+Fork maintained by [Alos](https://github.com/Alos-no). Original library by [Askmethat](https://github.com/AskmethatFR).

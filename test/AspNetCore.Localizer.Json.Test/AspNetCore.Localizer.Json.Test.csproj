@@ -35,6 +35,7 @@
     <EmbeddedResource Include="fallback\**\*.json" WithCulture="false" />
     <EmbeddedResource Include="encoding\**\*.json" WithCulture="false" />
     <EmbeddedResource Include="interpolation\**\*.json" WithCulture="false" />
+    <EmbeddedResource Include="culturefix\**\*.json" WithCulture="false" />
     <Content Include="physical\**\*.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

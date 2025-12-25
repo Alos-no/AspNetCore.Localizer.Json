@@ -1,0 +1,26 @@
+{
+  "Greeting": {
+    "Values": {
+      "en-US": "Hello",
+      "nb-NO": "Hei",
+      "fr-FR": "Bonjour",
+      "de-DE": "Hallo"
+    }
+  },
+  "Farewell": {
+    "Values": {
+      "en-US": "Goodbye",
+      "nb-NO": "Ha det",
+      "fr-FR": "Au revoir",
+      "de-DE": "Auf Wiedersehen"
+    }
+  },
+  "Welcome": {
+    "Values": {
+      "en-US": "Welcome to our application",
+      "nb-NO": "Velkommen til applikasjonen var",
+      "fr-FR": "Bienvenue dans notre application",
+      "de-DE": "Willkommen in unserer Anwendung"
+    }
+  }
+}

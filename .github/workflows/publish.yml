@@ -1,37 +1,169 @@
-name: Publish
+# GitHub Actions workflow for publishing NuGet packages using Trusted Publishing.
+#
+# This workflow automates the publishing process for Alos.AspNetCore.Localizer.Json:
+# 1. Triggers only after CI workflow passes on main branch
+# 2. Builds the solution in Release configuration
+# 3. Authenticates via OIDC (Trusted Publishing) - no long-lived API keys needed
+# 4. Pushes packages to NuGet.org (skipping already-published versions)
+# 5. Creates Git tags for each published package (v1.0.0 format)
+#
+# Triggers:
+# - Automatically after CI workflow succeeds on main branch
+# - When a GitHub Release is published
+# - Manual workflow dispatch (for testing or re-publishing)
+#
+# Prerequisites:
+# 1. Configure Trusted Publishing on NuGet.org:
+#    - Go to https://www.nuget.org/account/trustedpublishing
+#    - Add a new trusted publisher policy
+#    - Repository owner: Alos-no
+#    - Repository name: AspNetCore.Localizer.Json
+#    - Workflow file: .github/workflows/publish.yml
+#    - Select packages this policy applies to
+#
+# 2. Configure repository secret:
+#    - NUGET_USER: Your NuGet.org username
+#
+# Published packages:
+# - Alos.AspNetCore.Localizer.Json
+
+name: Publish NuGet Packages
 
 on:
-  push:
-    tags:
-      - "**"
+  # Trigger after CI workflow completes on main branch
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+  release:
+    types: [published]
+
+  # Allow manual trigger for testing or re-publishing
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (build and pack only, no push)'
+        required: false
+        default: false
+        type: boolean
+
+# Restrict default permissions for security
+permissions:
+  contents: write  # Required for creating Git tags
+  id-token: write  # Required for OIDC Trusted Publishing
+
+# Allow only one concurrent publish to prevent race conditions
+concurrency:
+  group: "nuget-publish"
+  cancel-in-progress: false
 
 jobs:
-  build:
+  publish:
+    # Only run if CI succeeded (for workflow_run trigger) or for other triggers
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
 
       - name: Restore dependencies
-        run: dotnet restore
-        working-directory: AspNetCore.Localizer.Json
+        run: dotnet restore AspNetCore.Localizer.Json.sln
 
-      - name: Build
-        run: dotnet build --no-restore -c Release /p:Version=$GITHUB_REF_NAME
-        working-directory: AspNetCore.Localizer.Json
+      - name: Build solution
+        run: dotnet build AspNetCore.Localizer.Json.sln --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test --verbosity normal
-        working-directory: test/AspNetCore.Localizer.Json.Test
+      - name: Run tests
+        run: dotnet test test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --configuration Release --no-build --verbosity normal
 
-      - name: Pack net core
-        run: dotnet pack -o netCore -c Release /p:Version=$GITHUB_REF_NAME
-        working-directory: AspNetCore.Localizer.Json
+      - name: Create NuGet packages
+        # Pack the main library project
+        # The version is determined by the <Version> property in the .csproj file
+        run: dotnet pack AspNetCore.Localizer.Json/AspNetCore.Localizer.Json.csproj --configuration Release --no-build --output ./artifacts
 
-      - name: Push net core to nuget
-        run: dotnet nuget push AspNetCore.Localizer.Json/netCore/AspNetCore.Localizer.Json.$GITHUB_REF_NAME.nupkg -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }}
+      - name: List generated packages
+        # Display the packages that were created for verification
+        run: |
+          echo "Generated packages:"
+          ls -la ./artifacts/*.nupkg
+
+      - name: NuGet Trusted Publishing Login
+        # Exchange GitHub OIDC token for a short-lived NuGet API key
+        # This eliminates the need for long-lived API key secrets
+        # Reference: https://github.com/NuGet/login
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        id: nuget-login
+        uses: nuget/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push packages to NuGet.org
+        # Push all packages to NuGet.org
+        # --skip-duplicate ensures idempotency - already published versions are skipped
+        # The API key is obtained from the login step's output (valid for ~1 hour)
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          for package in ./artifacts/*.nupkg; do
+            echo "Pushing: $package"
+            dotnet nuget push "$package" \
+              --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
+
+      - name: Create Git tags for published packages
+        # Create and push Git tags for each successfully published package
+        # Tag format: v1.0.0
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          # Configure Git for tagging
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Process each package and create corresponding tags
+          for package in ./artifacts/*.nupkg; do
+            # Extract filename without path (e.g., "Alos.AspNetCore.Localizer.Json.1.0.0.nupkg")
+            filename=$(basename "$package")
+
+            # Remove .nupkg extension
+            name_version="${filename%.nupkg}"
+
+            # Extract version (everything after the package name prefix)
+            if [[ "$name_version" == Alos.AspNetCore.Localizer.Json.* ]]; then
+              version="${name_version#Alos.AspNetCore.Localizer.Json.}"
+              tag="v${version}"
+            else
+              echo "Skipping unknown package: $filename"
+              continue
+            fi
+
+            # Check if tag already exists (locally or remotely)
+            if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "Tag $tag already exists locally, skipping"
+            elif git ls-remote --tags origin "refs/tags/$tag" | grep -q "$tag"; then
+              echo "Tag $tag already exists on remote, skipping"
+            else
+              echo "Creating tag: $tag"
+              git tag -a "$tag" -m "Release $tag"
+              git push origin "$tag"
+              echo "Successfully created and pushed tag: $tag"
+            fi
+          done
+
+      - name: Upload packages as artifacts
+        # Upload packages as workflow artifacts for inspection or manual deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts/*.nupkg
+          retention-days: 30
