@@ -77,19 +77,16 @@ jobs:
             9.0.x
             10.0.x
 
-      - name: Restore dependencies
-        run: dotnet restore test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj
-
-      - name: Build
-        run: dotnet build test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --configuration Release --no-restore
+      - name: Restore and build tests
+        run: dotnet build test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --configuration Release
 
       - name: Run tests
         run: dotnet test test/AspNetCore.Localizer.Json.Test/AspNetCore.Localizer.Json.Test.csproj --configuration Release --no-build --verbosity normal
 
       - name: Create NuGet packages
-        # Pack the main library project
+        # Pack the main library project (builds all target frameworks: net8.0, net9.0, net10.0)
         # The version is determined by the <Version> property in Directory.Build.props
-        run: dotnet pack AspNetCore.Localizer.Json/AspNetCore.Localizer.Json.csproj --configuration Release --no-build --output ./artifacts
+        run: dotnet pack AspNetCore.Localizer.Json/AspNetCore.Localizer.Json.csproj --configuration Release --output ./artifacts
 
       - name: List generated packages
         # Display the packages that were created for verification
