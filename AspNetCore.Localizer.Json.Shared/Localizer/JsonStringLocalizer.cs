@@ -163,7 +163,7 @@ namespace AspNetCore.Localizer.Json.Localizer
 
         public IStringLocalizer WithCulture(CultureInfo culture)
         {
-            LocalizationOptions.Value.SupportedCultureInfos.Add(culture);
+            AddMissingCultureToSupportedCulture(culture);
 
             CultureInfo.CurrentCulture = culture;
 
@@ -263,16 +263,14 @@ namespace AspNetCore.Localizer.Json.Localizer
 
         public void ClearMemCache(IEnumerable<CultureInfo> culturesToClearFromCache = null)
         {
-            foreach (var cultureInfo in culturesToClearFromCache ??
-                                        LocalizationOptions.Value.SupportedCultureInfos.ToArray())
+            foreach (var cultureInfo in culturesToClearFromCache ?? SnapshotSupportedCultures())
                 MemCache.Remove(GetCacheKey(cultureInfo));
         }
 
         public void ReloadMemCache(IEnumerable<CultureInfo> reloadCulturesToCache = null)
         {
             ClearMemCache();
-            foreach (var cultureInfo in reloadCulturesToCache ??
-                                        LocalizationOptions.Value.SupportedCultureInfos.ToArray())
+            foreach (var cultureInfo in reloadCulturesToCache ?? SnapshotSupportedCultures())
                 InitJsonFromCulture(cultureInfo);
         }
 

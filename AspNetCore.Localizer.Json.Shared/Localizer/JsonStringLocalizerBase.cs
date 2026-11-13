@@ -103,9 +103,27 @@ namespace AspNetCore.Localizer.Json.Localizer
 
         #region File Initialization
 
+        /// <summary>
+        /// Serializes every add to the supported cultures and every snapshot of them: the set is shared by every request,
+        /// and two first requests under an unsupported culture adding at once corrupt a <see cref="HashSet{T}"/>.
+        /// </summary>
+        private static readonly object SupportedCultureInfosLock = new();
+
         protected void AddMissingCultureToSupportedCulture(CultureInfo cultureInfo)
         {
-            LocalizationOptions.Value.SupportedCultureInfos.Add(cultureInfo);
+            lock (SupportedCultureInfosLock)
+            {
+                LocalizationOptions.Value.SupportedCultureInfos.Add(cultureInfo);
+            }
+        }
+
+        /// <summary>Copies the supported cultures under <see cref="SupportedCultureInfosLock"/>, so an enumeration never meets a concurrent add.</summary>
+        protected CultureInfo[] SnapshotSupportedCultures()
+        {
+            lock (SupportedCultureInfosLock)
+            {
+                return LocalizationOptions.Value.SupportedCultureInfos.ToArray();
+            }
         }
 
         /// <summary>

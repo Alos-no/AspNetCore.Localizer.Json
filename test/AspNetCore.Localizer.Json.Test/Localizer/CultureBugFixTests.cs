@@ -1,9 +1,12 @@
 using AspNetCore.Localizer.Json.Localizer;
 using AspNetCore.Localizer.Json.Test.Helpers;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Globalization;
 using System.Reflection;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using AspNetCore.Localizer.Json.JsonOptions;
 
@@ -15,6 +18,8 @@ namespace AspNetCore.Localizer.Json.Test.Localizer
     /// 2. Culture resolution priority - DefaultThreadCurrentUICulture incorrectly overrode CurrentUICulture
     /// 3. Fallback cache state corruption - after fallback to default culture on cache HIT,
     ///    _currentCulture was not updated, causing subsequent lookups to use wrong culture
+    /// 4. Concurrent adds to the supported cultures - the shared set was added to and enumerated without a lock, so
+    ///    parallel first requests under unsupported cultures could corrupt it
     /// </summary>
     [TestClass]
     public class CultureBugFixTests
@@ -633,6 +638,54 @@ namespace AspNetCore.Localizer.Json.Test.Localizer
                 CultureInfo.DefaultThreadCurrentUICulture = originalDefaultUICulture;
                 CultureInfo.CurrentUICulture = originalCurrentUICulture;
             }
+        }
+
+        #endregion
+
+        #region Bug Fix 4: Concurrent Adds to the Supported Cultures
+
+        /// <summary>Exposes the protected add every first request under an unsupported culture runs.</summary>
+        private sealed class SupportedCultureAddProbe : JsonStringLocalizer
+        {
+            public SupportedCultureAddProbe(IOptions<JsonLocalizationOptions> localizationOptions) : base(localizationOptions)
+            {
+            }
+
+            public void AddSupportedCulture(CultureInfo cultureInfo) => AddMissingCultureToSupportedCulture(cultureInfo);
+        }
+
+        /// <summary>
+        /// The supported cultures are one set shared by every request: 32 parallel first requests under 32 distinct
+        /// cultures each add theirs, no add throws and every culture is present afterwards.
+        /// </summary>
+        [TestMethod]
+        public async Task AddMissingCultureToSupportedCulture_FromThirtyTwoParallelTasks_AddsEveryCultureWithoutException()
+        {
+            const int taskCount = 32;
+            var options = new JsonLocalizationOptions
+            {
+                DefaultCulture = new CultureInfo("en-US"),
+                ResourcesPath = "culturefix",
+                AssemblyHelper = new AssemblyStub(Assembly.GetCallingAssembly())
+            };
+            var probe = new SupportedCultureAddProbe(Options.Create(options));
+            var cultures = CultureInfo.GetCultures(CultureTypes.SpecificCultures).Take(taskCount).ToArray();
+            using var startTogether = new Barrier(taskCount);
+
+            Assert.AreEqual(taskCount, cultures.Length, "The platform lists at least 32 specific cultures");
+
+            // Dedicated threads, so all 32 reach the barrier at once whatever the thread pool's size.
+            await Task.WhenAll(cultures.Select(culture => Task.Factory.StartNew(
+                () =>
+                {
+                    startTogether.SignalAndWait();
+                    probe.AddSupportedCulture(culture);
+                },
+                CancellationToken.None,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Default)));
+
+            CollectionAssert.AreEquivalent(cultures, options.SupportedCultureInfos.ToArray(), "Every culture is in the set once");
         }
 
         #endregion
